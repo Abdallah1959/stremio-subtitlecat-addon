@@ -1,0 +1,13 @@
+{
+    "name": "stremio-subtitlecat-addon",
+    "version": "1.0.0",
+    "description": "Stremio subtitle addon using SubtitleCat",
+    "main": "index.js",
+    "scripts": {
+        "start": "node index.js"
+    },
+    "dependencies": {
+        "stremio-addon-sdk": "^1.0.0",
+        "needle": "^3.0.0"
+    }
+}

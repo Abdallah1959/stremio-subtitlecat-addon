@@ -1,0 +1,19 @@
+{
+    "id": "community.subtitlecat",
+    "version": "1.0.0",
+    "name": "SubtitleCat Subtitles",
+    "description": "Fetches subtitles from SubtitleCat.com",
+    "resources": [
+        "subtitles"
+    ],
+    "types": [
+        "movie",
+        "series"
+    ],
+    "catalogs": [],
+    "idPrefixes": [
+        "tt"
+    ],
+    "logo": "https://subtitlecat.com/favicon.ico",
+    "background": "https://subtitlecat.com/images/banner.jpg"
+}
