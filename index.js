@@ -1,24 +1,43 @@
 const { addonBuilder } = require('stremio-addon-sdk');
 const needle = require('needle');
+const cheerio = require('cheerio');
 
 const manifest = require('./manifest.json');
 const builder = new addonBuilder(manifest);
 
-// Simulated subtitle fetching logic from SubtitleCat
-builder.defineSubtitlesHandler(async ({ type, id }) => {
-    const subtitles = [];
+async function fetchSubtitlesFromSubtitleCat(query) {
+  const searchUrl = `https://subtitlecat.com/search?q=${encodeURIComponent(query)}`;
+  try {
+    const res = await needle('get', searchUrl);
+    const $ = cheerio.load(res.body);
 
-    // Example logic (you'll replace this with real scraping logic)
-    if (id && type) {
+    let subtitles = [];
+
+    $('.subtitle-list .subtitle-item').each((i, el) => {
+      const lang = $(el).find('.language').text().trim().toLowerCase();
+      const link = $(el).find('a.download-link').attr('href');
+
+      if (link) {
         subtitles.push({
-            id: "subtitlecat-en",
-            lang: "en",
-            url: "https://subtitlecat.com/sub/your-subtitle-file.srt",
-            name: "English - SubtitleCat"
+          id: `subtitlecat-${i}`,
+          lang: lang,
+          url: `https://subtitlecat.com${link}`,
+          name: `SubtitleCat - ${lang.toUpperCase()}`
         });
-    }
+      }
+    });
 
-    return { subtitles };
+    return subtitles;
+  } catch (error) {
+    console.error('Error fetching subtitles:', error);
+    return [];
+  }
+}
+
+builder.defineSubtitlesHandler(async ({ name }) => {
+  if (!name) return { subtitles: [] };
+  const subtitles = await fetchSubtitlesFromSubtitleCat(name);
+  return { subtitles };
 });
 
 module.exports = builder.getInterface();
