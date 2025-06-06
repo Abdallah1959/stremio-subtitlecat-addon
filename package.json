@@ -10,6 +10,6 @@
     "axios": "^1.4.0",
     "cheerio": "^1.0.0-rc.12",
     "iso-639-1": "^2.1.13",
-    "stremio-addon-sdk": "^0.8.6"
+    "stremio-addon-sdk": "^0.8.5"
   }
 }
