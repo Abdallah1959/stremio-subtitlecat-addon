@@ -135,3 +135,8 @@ builder.defineSubtitlesHandler(async ({ id, type, name, year }) => {
 });
 
 module.exports = builder.getInterface();
+if (require.main === module) {
+  const { serveHTTP } = require("stremio-addon-sdk");
+  serveHTTP(builder.getInterface(), { port: 3000 });
+  console.log("✅ Server listening on http://localhost:3000");
+}
