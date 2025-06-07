@@ -23,6 +23,7 @@ function getLanguageCode(name) {
   return "en";
 }
 
+// دالة لجلب الترجمات من subtitlecat.com باستخدام Puppeteer
 async function fetchSubtitlesFromSubtitleCat(searchTerm) {
   const browser = await puppeteer.launch({
     headless: true,
@@ -89,11 +90,14 @@ async function fetchSubtitlesFromSubtitleCat(searchTerm) {
   return subtitles;
 }
 
+// تعريف معالج الترجمات مع طباعة الأخطاء والتفاصيل
 builder.defineSubtitlesHandler(async ({ id, name }) => {
+  console.log("Requested subtitles for:", name);
   if (!name) return { subtitles: [] };
 
   try {
     const subtitles = await fetchSubtitlesFromSubtitleCat(name);
+    console.log("Found subtitles:", subtitles);
     return { subtitles };
   } catch (error) {
     console.error("Error fetching subtitles:", error);
@@ -103,6 +107,7 @@ builder.defineSubtitlesHandler(async ({ id, name }) => {
 
 module.exports = builder.getInterface();
 
+// لتشغيل الإضافة محلياً على المنفذ 7000
 if (require.main === module) {
   const { serveHTTP } = require("stremio-addon-sdk");
   serveHTTP(builder.getInterface(), { port: 7000 });
