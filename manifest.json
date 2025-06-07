@@ -1,10 +1,1 @@
-{
-  "id": "org.subtitlecat",
-  "version": "1.0.1",
-  "name": "SubtitleCat Addon",
-  "description": "SubtitleCat subtitles for movies and series",
-  "resources": ["subtitles"],
-  "types": ["movie", "series"],
-  "catalogs": [],
-  "idPrefixes": ["tt"]
-}
+
