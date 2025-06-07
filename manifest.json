@@ -6,5 +6,5 @@
   "resources": ["subtitles"],
   "types": ["movie", "series"],
   "catalogs": [],
-  "idPrefixes": []
+  "idPrefixes": ["tt"]
 }
