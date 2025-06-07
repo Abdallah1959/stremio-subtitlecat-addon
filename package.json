@@ -8,6 +8,6 @@
   },
   "dependencies": {
     "puppeteer": "^20.7.2",
-    "stremio-addon-sdk": "^0.6.10"
+"stremio-addon-sdk": "Stremio/stremio-addon-sdk"
   }
 }
