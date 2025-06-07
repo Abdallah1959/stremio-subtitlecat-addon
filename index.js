@@ -1,125 +1,102 @@
 const { addonBuilder } = require("stremio-addon-sdk");
 const puppeteer = require("puppeteer");
-const iso6391 = require("iso-639-1");
-const manifest = require("./manifest.json");
+
+const manifest = {
+  id: "org.subtitlecat.puppeteer",
+  version: "1.0.0",
+  name: "SubtitleCat Puppeteer Addon",
+  description: "Fetch subtitles from SubtitleCat using Puppeteer",
+  resources: ["subtitles"],
+  types: ["movie", "series"],
+  catalogs: [],
+};
 
 const builder = new addonBuilder(manifest);
 
-// كاش مؤقت
-const cache = new Map();
-const CACHE_DURATION = 10 * 60 * 1000; // 10 دقائق
-
-async function fetchSubtitleLinks({ id, name }) {
-  const cacheKey = `${id || name}`;
-  const now = Date.now();
-
-  if (cache.has(cacheKey)) {
-    const cached = cache.get(cacheKey);
-    if (now - cached.timestamp < CACHE_DURATION) {
-      return cached.data;
-    }
-  }
-
-  let searchTerm = name;
-  if (id && id.startsWith("tt")) {
-    searchTerm = id;
-  }
-  const searchUrl = `https://subtitlecat.com/index.php?search=${encodeURIComponent(searchTerm)}`;
-
-  const browser = await puppeteer.launch({ headless: "new" });
-  const page = await browser.newPage();
-  await page.goto(searchUrl, { waitUntil: "domcontentloaded", timeout: 15000 });
-
-  const results = await page.evaluate(() => {
-    const rows = Array.from(document.querySelectorAll("tr"));
-    const data = [];
-
-    for (const row of rows) {
-      const linkEl = row.querySelector("td a");
-      const langEl = row.querySelector("td:nth-child(2)");
-      const qualityEl = row.querySelector("td:nth-child(4)");
-
-      if (linkEl && langEl && qualityEl) {
-        data.push({
-          link: "https://subtitlecat.com" + linkEl.getAttribute("href"),
-          lang: langEl.textContent.trim(),
-          quality: qualityEl.textContent.trim(),
-        });
-      }
-    }
-
-    return data;
-  });
-
-  await browser.close();
-
-  cache.set(cacheKey, { timestamp: now, data: results });
-  return results;
-}
-
-function filterSubtitlesByQuality(results, preferredQualities = ["HD", "SD", "DVDRip", "CAM"]) {
-  return results.filter((r) =>
-    preferredQualities.some((q) => r.quality.toUpperCase().includes(q.toUpperCase()))
-  );
-}
-
-async function getDownloadLink(subtitlePageUrl) {
-  const browser = await puppeteer.launch({ headless: "new" });
-  const page = await browser.newPage();
-  await page.goto(subtitlePageUrl, { waitUntil: "domcontentloaded", timeout: 15000 });
-
-  const downloadLink = await page.evaluate(() => {
-    const btn = document.querySelector("a.btn-success, a.download-button, a[href*='download']");
-    if (btn) {
-      let href = btn.getAttribute("href");
-      if (!href.startsWith("http")) {
-        href = "https://subtitlecat.com" + href;
-      }
-      return href;
-    }
-    return null;
-  });
-
-  await browser.close();
-  return downloadLink;
-}
-
+// دالة لتحويل اسم اللغة إلى كود ISO (مبسطة)
 function getLanguageCode(name) {
-  const lowerName = name.toLowerCase();
-  if (lowerName.includes("arabic") || lowerName.includes("arab")) return "ar";
-  if (lowerName.includes("english")) return "en";
-  if (lowerName.includes("french")) return "fr";
-  if (lowerName.includes("spanish")) return "es";
-
-  const code = iso6391.getCode(name);
-  return code || "en";
+  const lang = name.toLowerCase();
+  if (lang.includes("arabic") || lang.includes("arab")) return "ar";
+  if (lang.includes("english")) return "en";
+  if (lang.includes("french")) return "fr";
+  if (lang.includes("spanish")) return "es";
+  return "en";
 }
 
-builder.defineSubtitlesHandler(async ({ id, type, name, year }) => {
+async function fetchSubtitlesFromSubtitleCat(searchTerm) {
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  });
+  const page = await browser.newPage();
+
+  // رابط البحث
+  const searchUrl = `https://subtitlecat.com/index.php?search=${encodeURIComponent(searchTerm)}`;
+  await page.goto(searchUrl, { waitUntil: "domcontentloaded" });
+
+  // ننتظر جدول النتائج يظهر
+  await page.waitForSelector("table.table");
+
+  // نجمع روابط الترجمات من النتائج
+  const results = await page.$$eval("table.table tbody tr", rows => {
+    return rows.map(row => {
+      const linkElem = row.querySelector("td a");
+      const langText = row.querySelector("td:nth-child(2)")?.textContent.trim() || "";
+      const qualityText = row.querySelector("td:nth-child(4)")?.textContent.trim() || "";
+      if (linkElem && langText) {
+        return {
+          pageLink: linkElem.href,
+          lang: langText,
+          quality: qualityText,
+        };
+      }
+      return null;
+    }).filter(x => x !== null);
+  });
+
+  // دالة للحصول على رابط تنزيل الترجمة من صفحة الترجمة
+  async function getDownloadLink(subtitlePageUrl) {
+    const newPage = await browser.newPage();
+    await newPage.goto(subtitlePageUrl, { waitUntil: "domcontentloaded" });
+
+    // ننتظر زر التحميل يظهر
+    await newPage.waitForSelector("a.btn-success, a.download-button, a[href*='download']");
+
+    const downloadLink = await newPage.$eval("a.btn-success, a.download-button, a[href*='download']", a => a.href);
+
+    await newPage.close();
+    return downloadLink;
+  }
+
+  // نجمع روابط التحميل النهائية
+  const subtitles = [];
+  for (const res of results) {
+    try {
+      const downloadUrl = await getDownloadLink(res.pageLink);
+      subtitles.push({
+        lang: getLanguageCode(res.lang),
+        url: downloadUrl,
+        title: `SubtitleCat - ${res.lang} [${res.quality}]`,
+        id: res.pageLink,
+      });
+    } catch (err) {
+      // لو حصل خطأ، نتجاهله ونكمل
+      continue;
+    }
+  }
+
+  await browser.close();
+  return subtitles;
+}
+
+builder.defineSubtitlesHandler(async ({ id, name }) => {
   if (!name) return { subtitles: [] };
 
   try {
-    let results = await fetchSubtitleLinks({ id, name });
-    results = filterSubtitlesByQuality(results);
-
-    const subtitles = [];
-    for (const result of results) {
-      const downloadUrl = await getDownloadLink(result.link);
-      if (downloadUrl) {
-        const langCode = getLanguageCode(result.lang);
-        subtitles.push({
-          id: result.link,
-          lang: langCode,
-          url: downloadUrl,
-          title: `SubtitleCat - ${result.lang} [${result.quality}]`,
-          year: year || undefined,
-        });
-      }
-    }
-
+    const subtitles = await fetchSubtitlesFromSubtitleCat(name);
     return { subtitles };
   } catch (error) {
-    console.error("SubtitleCat Addon Error:", error.message);
+    console.error("Error fetching subtitles:", error);
     return { subtitles: [] };
   }
 });
@@ -128,6 +105,6 @@ module.exports = builder.getInterface();
 
 if (require.main === module) {
   const { serveHTTP } = require("stremio-addon-sdk");
-  serveHTTP(builder.getInterface(), { port: 3000 });
-  console.log("✅ Server running at http://localhost:3000");
+  serveHTTP(builder.getInterface(), { port: 7000 });
+  console.log("Addon running on http://localhost:7000");
 }
